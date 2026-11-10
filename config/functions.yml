@@ -1,0 +1,72 @@
+appointment:
+  handler: src/infrastructure/adapter/in/lambda/appointment.handler
+  environment:
+    APPOINTMENTS_TABLE: ${self:custom.tableName}
+    APPOINTMENTS_TOPIC_ARN: !Ref AppointmentsTopic
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - dynamodb:PutItem
+        - dynamodb:GetItem
+        - dynamodb:Query
+      Resource: !GetAtt AppointmentsTable.Arn
+    - Effect: Allow
+      Action: sns:Publish
+      Resource: !Ref AppointmentsTopic
+  events:
+    - http:
+        path: appointments
+        method: post
+        cors: true
+    - http:
+        path: appointments/{insuredId}
+        method: get
+        cors: true
+        request:
+          parameters:
+            paths:
+              insuredId: true
+    - sqs:
+        arn: !GetAtt SqsConfirmation.Arn
+        batchSize: 10
+        functionResponseType: ReportBatchItemFailures
+
+appointment_pe:
+  handler: src/infrastructure/adapter/in/lambda/appointmentCountry.handler
+  timeout: ${self:custom.countryFunctionTimeout}
+  environment:
+    DB_HOST: ${ssm:${self:custom.ssmPrefix}/pe/db-host}
+    DB_PORT: ${ssm:${self:custom.ssmPrefix}/pe/db-port}
+    DB_USER: ${ssm:${self:custom.ssmPrefix}/pe/db-user}
+    DB_PASSWORD: ${ssm:${self:custom.ssmPrefix}/pe/db-password}
+    DB_NAME: ${ssm:${self:custom.ssmPrefix}/pe/db-name}
+    EVENT_BUS_NAME: !Ref AppointmentsEventBus
+  iamRoleStatements:
+    - Effect: Allow
+      Action: events:PutEvents
+      Resource: !GetAtt AppointmentsEventBus.Arn
+  events:
+    - sqs:
+        arn: !GetAtt SqsPe.Arn
+        batchSize: 10
+        functionResponseType: ReportBatchItemFailures
+
+appointment_cl:
+  handler: src/infrastructure/adapter/in/lambda/appointmentCountry.handler
+  timeout: ${self:custom.countryFunctionTimeout}
+  environment:
+    DB_HOST: ${ssm:${self:custom.ssmPrefix}/cl/db-host}
+    DB_PORT: ${ssm:${self:custom.ssmPrefix}/cl/db-port}
+    DB_USER: ${ssm:${self:custom.ssmPrefix}/cl/db-user}
+    DB_PASSWORD: ${ssm:${self:custom.ssmPrefix}/cl/db-password}
+    DB_NAME: ${ssm:${self:custom.ssmPrefix}/cl/db-name}
+    EVENT_BUS_NAME: !Ref AppointmentsEventBus
+  iamRoleStatements:
+    - Effect: Allow
+      Action: events:PutEvents
+      Resource: !GetAtt AppointmentsEventBus.Arn
+  events:
+    - sqs:
+        arn: !GetAtt SqsCl.Arn
+        batchSize: 10
+        functionResponseType: ReportBatchItemFailures

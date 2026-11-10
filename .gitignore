@@ -1,0 +1,11 @@
+node_modules/
+.serverless/
+.esbuild/
+coverage/
+.env
+.env.*
+*.log
+.idea/
+.vscode/
+# Enunciado del reto: no se publica en el repo
+Reto - Rimac Backend.pdf

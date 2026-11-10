@@ -1,0 +1,49 @@
+service: reto-rimac
+frameworkVersion: '3'
+
+provider:
+  name: aws
+  runtime: nodejs22.x
+  region: ${opt:region, 'us-east-1'}
+  stage: ${opt:stage, 'dev'}
+  memorySize: ${self:custom.env.memorySize}
+  timeout: 10
+  architecture: arm64
+  logRetentionInDays: ${self:custom.env.logRetentionInDays}
+  versionFunctions: false
+  environment:
+    NODE_OPTIONS: --enable-source-maps
+    STAGE: ${self:provider.stage}
+
+plugins:
+  - serverless-esbuild
+  - serverless-iam-roles-per-function
+  - serverless-offline
+
+custom:
+  env: ${file(./config/env.${sls:stage}.yml)}
+  prefix: ${self:service}-${sls:stage}
+  tableName: ${self:custom.prefix}-appointments
+  ssmPrefix: /${self:service}/${sls:stage}
+  countryFunctionTimeout: 15
+  countryQueueVisibilityTimeout: 90
+  confirmationQueueVisibilityTimeout: 60
+  maxReceiveCount: 3
+  esbuild:
+    bundle: true
+    minify: false
+    sourcemap: true
+    target: node22
+    platform: node
+    exclude:
+      - '@aws-sdk/*'
+
+package:
+  individually: true
+
+functions: ${file(./config/functions.yml)}
+
+resources:
+  - ${file(resources/dynamodb.yml)}
+  - ${file(resources/sns-sqs.yml)}
+  - ${file(resources/eventbridge.yml)}

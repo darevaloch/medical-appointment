@@ -1,0 +1,50 @@
+Resources:
+  AppointmentsEventBus:
+    Type: AWS::Events::EventBus
+    Properties:
+      Name: ${self:custom.prefix}-appointments
+
+  SqsConfirmationDlq:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: ${self:custom.prefix}-SQS_CONFIRMATION-DLQ
+      MessageRetentionPeriod: 1209600
+
+  SqsConfirmation:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: ${self:custom.prefix}-SQS_CONFIRMATION
+      VisibilityTimeout: ${self:custom.confirmationQueueVisibilityTimeout}
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt SqsConfirmationDlq.Arn
+        maxReceiveCount: ${self:custom.maxReceiveCount}
+
+  AppointmentConfirmedRule:
+    Type: AWS::Events::Rule
+    Properties:
+      EventBusName: !Ref AppointmentsEventBus
+      EventPattern:
+        source:
+          - rimac.appointment
+        detail-type:
+          - AppointmentConfirmed
+      Targets:
+        - Id: confirmation-queue
+          Arn: !GetAtt SqsConfirmation.Arn
+
+  ConfirmationQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref SqsConfirmation
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sqs:SendMessage
+            Resource: !GetAtt SqsConfirmation.Arn
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !GetAtt AppointmentConfirmedRule.Arn

@@ -1,0 +1,77 @@
+Resources:
+  AppointmentsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: ${self:custom.prefix}-appointments
+
+  SqsPeDlq:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: ${self:custom.prefix}-SQS_PE-DLQ
+      MessageRetentionPeriod: 1209600
+
+  SqsPe:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: ${self:custom.prefix}-SQS_PE
+      VisibilityTimeout: ${self:custom.countryQueueVisibilityTimeout}
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt SqsPeDlq.Arn
+        maxReceiveCount: ${self:custom.maxReceiveCount}
+
+  SqsClDlq:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: ${self:custom.prefix}-SQS_CL-DLQ
+      MessageRetentionPeriod: 1209600
+
+  SqsCl:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: ${self:custom.prefix}-SQS_CL
+      VisibilityTimeout: ${self:custom.countryQueueVisibilityTimeout}
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt SqsClDlq.Arn
+        maxReceiveCount: ${self:custom.maxReceiveCount}
+
+  SqsPeSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref AppointmentsTopic
+      Protocol: sqs
+      Endpoint: !GetAtt SqsPe.Arn
+      RawMessageDelivery: true
+      FilterPolicyScope: MessageAttributes
+      FilterPolicy:
+        countryISO: [PE]
+
+  SqsClSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref AppointmentsTopic
+      Protocol: sqs
+      Endpoint: !GetAtt SqsCl.Arn
+      RawMessageDelivery: true
+      FilterPolicyScope: MessageAttributes
+      FilterPolicy:
+        countryISO: [CL]
+
+  CountryQueuesPolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref SqsPe
+        - !Ref SqsCl
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: sns.amazonaws.com
+            Action: sqs:SendMessage
+            Resource:
+              - !GetAtt SqsPe.Arn
+              - !GetAtt SqsCl.Arn
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !Ref AppointmentsTopic

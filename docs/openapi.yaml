@@ -1,0 +1,200 @@
+openapi: 3.0.3
+info:
+  title: Agendamiento de citas médicas
+  version: 1.0.0
+  description: |
+    API para que un asegurado agende una cita médica en Perú (PE) o Chile (CL).
+
+    El agendamiento es **asíncrono**: el POST registra la cita en estado `pending` y devuelve 202.
+    El país correspondiente la procesa en segundo plano (SNS → SQS → RDS → EventBridge → SQS) y la
+    cita pasa a `completed`. El GET permite consultar el estado.
+
+servers:
+  - url: https://{apiId}.execute-api.us-east-1.amazonaws.com/{stage}
+    variables:
+      apiId:
+        default: h6nrz7bib0
+        description: ID del API Gateway (aparece en la salida de `serverless deploy`)
+      stage:
+        default: dev
+
+tags:
+  - name: Appointments
+
+paths:
+  /appointments:
+    post:
+      tags: [Appointments]
+      summary: Solicitar el agendamiento de una cita
+      operationId: createAppointment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAppointmentRequest'
+            examples:
+              peru:
+                value: { insuredId: '00123', scheduleId: 100, countryISO: PE }
+              chile:
+                value: { insuredId: '04567', scheduleId: 205, countryISO: CL }
+      responses:
+        '202':
+          description: Solicitud aceptada; el agendamiento está en proceso.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppointmentAccepted'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /appointments/{insuredId}:
+    get:
+      tags: [Appointments]
+      summary: Listar las citas de un asegurado con su estado
+      description: Devuelve las citas de la más reciente a la más antigua. Si no tiene citas, `data` es una lista vacía.
+      operationId: listAppointmentsByInsured
+      parameters:
+        - name: insuredId
+          in: path
+          required: true
+          description: Código del asegurado de 5 dígitos (conserva ceros a la izquierda).
+          schema:
+            type: string
+            pattern: '^\d{5}$'
+            example: '00123'
+      responses:
+        '200':
+          description: Citas del asegurado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppointmentList'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+components:
+  schemas:
+    CreateAppointmentRequest:
+      type: object
+      required: [insuredId, scheduleId, countryISO]
+      properties:
+        insuredId:
+          type: string
+          pattern: '^\d{5}$'
+          description: Código del asegurado de 5 dígitos. Debe enviarse como string para conservar los ceros.
+          example: '00123'
+        scheduleId:
+          type: integer
+          minimum: 1
+          description: Identificador del espacio (centro médico + especialidad + médico + fecha y hora).
+          example: 100
+        countryISO:
+          type: string
+          enum: [PE, CL]
+          example: PE
+
+    Appointment:
+      type: object
+      required: [id, insuredId, scheduleId, countryISO, status, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          description: ULID de la cita (ordenable por fecha de creación).
+          example: 01JCD5Z8Q6V7X0J4K9M2N3P4R5
+        insuredId:
+          type: string
+          example: '00123'
+        scheduleId:
+          type: integer
+          example: 100
+        countryISO:
+          type: string
+          enum: [PE, CL]
+        status:
+          type: string
+          enum: [pending, completed]
+          description: '`pending` al registrarse; `completed` cuando el país confirma el agendamiento.'
+        createdAt:
+          type: string
+          format: date-time
+          example: '2026-11-09T10:00:00.000Z'
+        updatedAt:
+          type: string
+          format: date-time
+          example: '2026-11-09T10:00:00.000Z'
+
+    AppointmentAccepted:
+      type: object
+      required: [message, data]
+      properties:
+        message:
+          type: string
+          example: El agendamiento está en proceso
+        data:
+          $ref: '#/components/schemas/Appointment'
+
+    AppointmentList:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Appointment'
+
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          description: Código estable para que el cliente decida qué hacer.
+          enum: [INVALID_REQUEST, INTERNAL_ERROR]
+        message:
+          type: string
+        details:
+          type: array
+          description: Solo en INVALID_REQUEST. Un mensaje por campo inválido.
+          items:
+            type: string
+
+  responses:
+    BadRequest:
+      description: El request tiene un formato incorrecto o viola una regla de negocio.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            formato:
+              summary: Falta un campo o tiene otro tipo
+              value:
+                code: INVALID_REQUEST
+                message: El request no tiene el formato esperado
+                details: ['scheduleId: Required']
+            asegurado:
+              summary: insuredId sin 5 dígitos
+              value:
+                code: INVALID_REQUEST
+                message: El request no tiene el formato esperado
+                details: ['insuredId: debe tener 5 dígitos']
+            pais:
+              summary: País no soportado
+              value:
+                code: INVALID_REQUEST
+                message: El request no tiene el formato esperado
+                details: ["countryISO: Invalid enum value. Expected 'PE' | 'CL', received 'AR'"]
+    InternalError:
+      description: Error inesperado. El detalle queda en CloudWatch, no se expone al cliente.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: INTERNAL_ERROR
+            message: Ocurrió un error inesperado
