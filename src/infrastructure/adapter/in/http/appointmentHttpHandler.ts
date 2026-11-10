@@ -4,6 +4,7 @@ import { ListAppointmentsByInsuredService } from '../../../../application/servic
 import { parseJson, parseWith } from '../shared/validation';
 import { createAppointmentBodySchema, insuredPathSchema } from './httpSchemas';
 import { errorResponse, jsonResponse } from './advice/httpResponse';
+import { swaggerPage } from './swaggerPage';
 
 export const SCHEDULING_IN_PROGRESS_MESSAGE = 'El agendamiento está en proceso';
 
@@ -30,6 +31,7 @@ export const makeAppointmentHttpHandler = ({ create, list }: AppointmentHttpUseC
   const routes: Record<string, RouteHandler> = {
     'POST /appointments': createAppointment,
     'GET /appointments/{insuredId}': listAppointments,
+    'GET /docs': swaggerPage,
   };
 
   return async (event) => {

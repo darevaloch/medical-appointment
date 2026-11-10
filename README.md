@@ -4,7 +4,7 @@ Backend para agendar citas médicas en Perú (PE) y Chile (CL), hecho con Server
 
 **URL:** https://h6nrz7bib0.execute-api.us-east-1.amazonaws.com/dev
 
-**OpenAPI:** [docs/openapi.yaml](docs/openapi.yaml)
+**Swagger:** https://h6nrz7bib0.execute-api.us-east-1.amazonaws.com/dev/docs ([docs/openapi.yaml](docs/openapi.yaml))
 
 ## Endpoints
 

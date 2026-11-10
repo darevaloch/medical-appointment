@@ -2,6 +2,7 @@ import {
   SCHEDULING_IN_PROGRESS_MESSAGE,
   makeAppointmentHttpHandler,
 } from '../../../../src/infrastructure/adapter/in/http/appointmentHttpHandler';
+import { OPENAPI_SPEC_URL } from '../../../../src/infrastructure/adapter/in/http/swaggerPage';
 import { buildPrimitives } from '../../../helpers/fakes';
 import { httpEvent } from '../../../helpers/events';
 
@@ -124,6 +125,17 @@ describe('appointment HTTP handler', () => {
       expect(result.statusCode).toBe(400);
       expect(list.execute).not.toHaveBeenCalled();
     });
+  });
+
+  it('GET /docs responde la página de Swagger UI apuntando al OpenAPI del repo', async () => {
+    const { handler } = setup();
+
+    const result = await handler(httpEvent({ httpMethod: 'GET', resource: '/docs' }));
+
+    expect(result.statusCode).toBe(200);
+    expect(result.headers).toEqual({ 'Content-Type': 'text/html; charset=utf-8' });
+    expect(result.body).toContain('SwaggerUIBundle');
+    expect(result.body).toContain(OPENAPI_SPEC_URL);
   });
 
   it('responde 404 para una ruta desconocida', async () => {

@@ -26,6 +26,9 @@ appointment:
           parameters:
             paths:
               insuredId: true
+    - http:
+        path: docs
+        method: get
     - sqs:
         arn: !GetAtt SqsConfirmation.Arn
         batchSize: 10
